@@ -7,9 +7,10 @@ A recursive decent parser for the following grammar expressed in EBNF.
 program = block ".";
 block = ["const" ident "=" number {"," ident "=" number} ";"]
         ["var" ident {"," ident} ";"]
-        {"procedure" ident ";" block ";"} statement;
+        {"procedure" ident ["(" ident {"," ident} ")"] ";" block ";"}
+        statement;
 statement = [ident ":=" expression
-             | "call" ident
+             | "call" ident ["(" expression {"," expression} ")"]
              | "if" condition "then" statement
              | "begin" statement {";" statement} "end"
              | "while" condition "do" statement
@@ -52,6 +53,8 @@ ERROR_CODES = {
     23: "The preceding factor cannot be followed by this symbol",
     24: "An expression cannot begin with this symbol",
     30: "This number is too large",
+    31: "Call needs closing \")\"",
+    32: "Expected an identifier",
 }
 
 
@@ -264,8 +267,25 @@ class Parser:
             self.get_token()
             ident = self.match(Symbol.IDENT, 4)
             self.declarations[ident] = Symbol.PROC
+
+            parameters = []
+            if self.token == Symbol.LPAREN:
+                self.get_token()
+                parameters.append(self.var_declaration())
+                while self.token == Symbol.COMMA:
+                    self.get_token()
+                    parameters.append(self.var_declaration())
+                self.match(Symbol.RPAREN, 31)
+
             self.match(Symbol.SEMICOLON, 5)
-            blocks.append(self.node("Procedure", name=ident, blocks=self.block()))
+            blocks.append(
+                self.node(
+                    "Procedure",
+                    name=ident,
+                    parameters=parameters,
+                    blocks=self.block()
+                )
+            )
             self.match(Symbol.SEMICOLON, 5)
 
         statement = self.statement()
@@ -305,7 +325,17 @@ class Parser:
                 self.error(11)
             if declaration_type != Symbol.PROC:
                 self.error(15)
-            return self.node("Call", name=ident)
+
+            # call arguments
+            arguments = []
+            if self.token == Symbol.LPAREN:
+                self.get_token()
+                arguments.append(self.expression())
+                while self.token == Symbol.COMMA:
+                    self.get_token()
+                    arguments.append(self.expression())
+                self.match(Symbol.RPAREN, 31)
+            return self.node("Call", name=ident, arguments=arguments)
 
         if self.token == Symbol.IF:
             self.get_token()

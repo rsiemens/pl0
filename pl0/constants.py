@@ -5,6 +5,7 @@ class OP_CODE:
     STO = "STO"  # Store variable
     CAL = "CAL"  # Call procedure
     INT = "INT"  # Increment topstack register
+    DET = "DET"  # Decrement topstack register
     JMP = "JMP"  # Jump
     JPC = "JPC"  # Jump conditional
 

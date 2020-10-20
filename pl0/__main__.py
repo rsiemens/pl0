@@ -1,6 +1,6 @@
 import argparse
 
-from pl0 import VM, Generator, Parser, ParserException
+from pl0 import VM, Generator, Parser, transpile
 
 
 class Command:
@@ -23,9 +23,21 @@ class Command:
             default=False,
             help="Perform up to code generation on the src file and return the resulting code.",
         )
+        parser.add_argument(
+            "--transpile",
+            action="store",
+            dest="transpile_target",
+            type=str,
+            default=None,
+            help="Transpile to target",
+        )
 
     def handle(self, args):
         with open(args.src, "r", encoding="utf8") as f:
+            if args.transpile_target != None:
+                print(transpile(f.read(), target=args.transpile_target.lower()))
+                return
+
             ast = Parser.parse(f.read())
             if ast is None:
                 return

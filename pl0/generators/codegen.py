@@ -1,17 +1,18 @@
 from collections import ChainMap
 
 from pl0.constants import OP_CODE, OPERATION
+from pl0.generators.visitor import Visitor
 
 
-class Generator:
+class Generator(Visitor):
     def __init__(self):
         self.scope = ChainMap()
         self.code = []
 
-    def visit_Const(self, node):
+    def visit_const(self, node):
         self.scope[node["name"]] = {"type": node["type"], "value": node["value"]}
 
-    def visit_Var(self, node):
+    def visit_var(self, node):
         # 0 based. First 3 are for some stack frame book keeping (SL, DL, RA)
         addr_offset = self.declaration_count() + 3
         self.scope[node["name"]] = {
@@ -20,13 +21,22 @@ class Generator:
             "offset": addr_offset,
         }
 
-    def visit_Procedure(self, node):
+    def visit_procedure(self, node):
         proc_declaration = {"type": node["type"], "level": len(self.scope.maps) - 1}
         self.scope[node["name"]] = proc_declaration
 
         # create a new scope for the procedure declarations to live in
         self.push_scope()
         jmp_idx = self.generate(OP_CODE.JMP, 0, 0)
+
+        for i, parameter in enumerate(node["parameters"], start=1):
+            self.scope[parameter["name"]] = {
+                "type": parameter["type"],
+                "level": len(self.scope.maps) - 1,
+                "offset": -i,  # parameters are found just below the base pointer.
+            }                  # the caller will take care of removing them when the
+                               # procedure returns
+
         for block in node["blocks"]:
             if self.should_fixup(block):
                 self.fixup(jmp_idx)
@@ -36,29 +46,38 @@ class Generator:
         self.generate(OP_CODE.OPR, 0, OPERATION.RETURN)
         self.pop_scope()
 
-    def visit_Assignment(self, node):
+    def visit_assignment(self, node):
         level = len(self.scope.maps) - 1
         var = self.scope[node["name"]]
         self.visit(node["value"])
         self.generate(OP_CODE.STO, level - var["level"], var["offset"])
 
-    def visit_Call(self, node):
+    def visit_call(self, node):
+        # This will push the parameters onto the stack in reverse order.
+        # then they can be accessed by base_pointer - 1 for first arg, etc.
+        for argument in node["arguments"][::-1]:
+            self.visit(argument)
+
         level = len(self.scope.maps) - 1
         procedure = self.scope[node["name"]]
         self.generate(OP_CODE.CAL, level - procedure["level"], procedure["address"])
 
-    def visit_Block(self, node):
+        # "Pop off" any parameters by decrementing the stack pointer
+        for argument in node["arguments"]:
+            self.generate(OP_CODE.DET, 0, 0)
+
+    def visit_block(self, node):
         for statement in node["statements"]:
             self.visit(statement)
 
-    def visit_If(self, node):
+    def visit_if(self, node):
         self.visit(node["condition"])
         jpc_idx = self.generate(OP_CODE.JPC, 0, 0)
         self.visit(node["body"])
         # fixup
         self.code[jpc_idx][2] = len(self.code)
 
-    def visit_Loop(self, node):
+    def visit_loop(self, node):
         cond_idx = len(self.code)
         self.visit(node["condition"])
         jpc_idx = self.generate(OP_CODE.JPC, 0, 0)
@@ -67,18 +86,18 @@ class Generator:
         # fixup
         self.code[jpc_idx][2] = len(self.code)
 
-    def visit_Output(self, node):
+    def visit_output(self, node):
         self.visit(node["value"])
         self.generate(OP_CODE.OPR, 0, OPERATION.WRITE)
 
-    def visit_Debug(self, node):
+    def visit_debug(self, node):
         self.generate(OP_CODE.OPR, 0, OPERATION.DEBUG)
 
-    def visit_Odd(self, node):
+    def visit_odd(self, node):
         self.visit(node["expression"])
         self.generate(OP_CODE.OPR, 0, OPERATION.ODD)
 
-    def visit_Binary(self, node):
+    def visit_binary(self, node):
         operator = node["operator"]
         self.visit(node["left"])
         self.visit(node["right"])
@@ -104,11 +123,11 @@ class Generator:
         elif operator == "LEQ":  # <=
             self.generate(OP_CODE.OPR, 0, OPERATION.LESS_EQUAL)
 
-    def visit_Unary(self, node):
+    def visit_unary(self, node):
         self.visit(node["right"])
         self.generate(OP_CODE.OPR, 0, OPERATION.NEGATE)
 
-    def visit_Identifier(self, node):
+    def visit_identifier(self, node):
         level = len(self.scope.maps) - 1
         referenced = self.scope[node["name"]]
         if referenced["type"] == "Const":
@@ -118,14 +137,11 @@ class Generator:
                 OP_CODE.LOD, level - referenced["level"], referenced["offset"]
             )
 
-    def visit_Number(self, node):
+    def visit_number(self, node):
         self.generate(OP_CODE.LIT, 0, node["value"])
 
-    def visit_Grouping(self, node):
+    def visit_grouping(self, node):
         self.visit(node["expression"])
-
-    def visit(self, node):
-        getattr(self, f"visit_{node['type']}")(node)
 
     def generate(self, instruction, level, value):
         self.code.append([instruction, level, value])

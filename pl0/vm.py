@@ -167,6 +167,8 @@ class VM:
                 self.program = value
             elif op_code == OP_CODE.INT:
                 self.topstack += value
+            elif op_code == OP_CODE.DET:
+                self.topstack -= value
             elif op_code == OP_CODE.JMP:
                 self.program = value
             elif op_code == OP_CODE.JPC:

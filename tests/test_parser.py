@@ -143,6 +143,7 @@ class ParserTestCases(TestCase):
                 {
                     "type": "Procedure",
                     "name": "foo",
+                    "parameters": [],
                     "blocks": [
                         {"type": "Output", "value": {"type": "Number", "value": 10}}
                     ],
@@ -155,6 +156,7 @@ class ParserTestCases(TestCase):
                 {
                     "type": "Procedure",
                     "name": "foo",
+                    "parameters": [],
                     "blocks": [
                         {"type": "Output", "value": {"type": "Number", "value": 10}}
                     ],
@@ -162,10 +164,51 @@ class ParserTestCases(TestCase):
                 {
                     "type": "Procedure",
                     "name": "bar",
+                    "parameters": [],
                     "blocks": [
                         {"type": "Output", "value": {"type": "Number", "value": 11}}
                     ],
                 },
+            ],
+        )
+
+        self.assertEqual(
+            Parser("procedure foo; write 10; procedure bar; write 11;").block(),
+            [
+                {
+                    "type": "Procedure",
+                    "name": "foo",
+                    "parameters": [],
+                    "blocks": [
+                        {"type": "Output", "value": {"type": "Number", "value": 10}}
+                    ],
+                },
+                {
+                    "type": "Procedure",
+                    "name": "bar",
+                    "parameters": [],
+                    "blocks": [
+                        {"type": "Output", "value": {"type": "Number", "value": 11}}
+                    ],
+                },
+            ],
+        )
+
+        # Procedure declaration with parameters
+        self.assertEqual(
+            Parser("procedure foo(a, b); write 10;").block(),
+            [
+                {
+                    "type": "Procedure",
+                    "name": "foo",
+                    "parameters": [
+                        {"type": "Var", "name": "a"},
+                        {"type": "Var", "name": "b"},
+                    ],
+                    "blocks": [
+                        {"type": "Output", "value": {"type": "Number", "value": 10}}
+                    ],
+                }
             ],
         )
 
@@ -200,7 +243,29 @@ class ParserTestCases(TestCase):
         # Procedure call statement
         parser = Parser("call foo")
         parser.declarations["foo"] = Symbol.PROC
-        self.assertEqual(parser.statement(), {"type": "Call", "name": "foo"})
+        self.assertEqual(parser.statement(), {"type": "Call", "name": "foo", "arguments": []})
+
+        # Procedure call statement with arguments
+        parser = Parser("call foo(a, b + 4)")
+        parser.declarations["foo"] = Symbol.PROC
+        parser.declarations["a"] = Symbol.VAR
+        parser.declarations["b"] = Symbol.VAR
+        self.assertEqual(
+            parser.statement(),
+            {
+                "type": "Call",
+                "name": "foo",
+                "arguments": [
+                    {"type": "Identifier", "name": "a"},
+                    {
+                        "type": "Binary",
+                        "left": {"type": "Identifier", "name": "b"},
+                        "right": {"type": "Number", "value": 4},
+                        "operator": Symbol.PLUS,
+                    }
+                ]
+            }
+        )
 
         # If statement
         parser = Parser("if x < 4 then write x")
