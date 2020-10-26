@@ -1,0 +1,31 @@
+const max = 100;
+var arg, ret;
+
+procedure isprime(val);
+    var i;
+begin
+    ret := 1;
+    i := 2;
+    while i < val do
+    begin
+        if val / i * i = val then
+        begin
+            ret := 0;
+            i := val
+        end;
+        i := i + 1
+    end
+end;
+
+procedure primes;
+begin
+    arg := 2;
+    while arg < max do
+    begin
+        call isprime(arg);
+        if ret = 1 then write arg;
+        arg := arg + 1
+    end
+end;
+
+call primes.

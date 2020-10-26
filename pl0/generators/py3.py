@@ -22,9 +22,17 @@ class PythonTranspiler(Visitor):
 
     def visit_procedure(self, node):
         self.indent()
-        self.output(f"\ndef {node['name']}():\n")
+        self.output(f"\ndef {node['name']}(")
 
         self.scope.append({"name": node["name"], "vars": []})
+        for i, parameter in enumerate(node["parameters"]):
+            self.scope[-1]["vars"].append(parameter["name"])
+            self.output(parameter["name"])
+            if len(node["parameters"]) > 1 and i < len(node["parameters"]) - 1:
+                self.output(", ")
+
+        self.output("):\n")
+
         self.depth += 1
         for block in node["blocks"]:
             self.visit(block)
@@ -46,7 +54,14 @@ class PythonTranspiler(Visitor):
 
     def visit_call(self, node):
         self.indent()
-        self.output(f"{node['name']}()\n")
+        self.output(f"{node['name']}(")
+
+        for i, argument in enumerate(node["arguments"]):
+            self.visit(argument)
+            if len(node["arguments"]) > 1 and i < len(node["arguments"]) - 1:
+                self.output(", ")
+
+        self.output(")\n")
 
     def visit_block(self, node):
         for statement in node["statements"]:
